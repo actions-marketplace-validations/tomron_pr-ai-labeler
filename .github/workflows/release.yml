@@ -1,0 +1,54 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver release tag, e.g. v1.0.1 (stable releases only)
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          [[ "$VERSION" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || exit 1
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Version already exists. Published versions are immutable."
+            exit 1
+          fi
+          VERSION="$VERSION" node -e 'if (require("./package.json").version !== process.env.VERSION.slice(1)) process.exit(1)'
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: git diff --exit-code
+      - run: npm audit --omit=dev --audit-level=moderate
+      - name: Create immutable release and update floating major
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$VERSION" -m "$VERSION" "$GITHUB_SHA"
+          git push origin "$VERSION"
+          gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
+          MAJOR="${VERSION%%.*}"
+          OLD="$(git ls-remote origin "refs/tags/$MAJOR" | cut -f1)"
+          git tag -fa "$MAJOR" -m "Latest $MAJOR release: $VERSION" "$GITHUB_SHA"
+          git push --force-with-lease="refs/tags/$MAJOR:$OLD" origin "refs/tags/$MAJOR"

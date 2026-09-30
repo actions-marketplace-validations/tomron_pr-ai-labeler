@@ -14,8 +14,8 @@ be created or applied. The action only adds labels, never removes existing ones.
    and store it as the repository secret `TYPESAFE_API_KEY`. Do not put it in YAML.
 2. Commit `.github/pr-labeler.yml` to your default branch.
 3. Add this workflow. Start with `dry-run: 'true'`, inspect the outputs, then
-   change it to `'false'`. Replace `COMMIT_SHA` with a reviewed commit of this
-   action. No release tag is published yet.
+   change it to `'false'`. Use `@v1` for compatible releases, `@v1.0.0` for this exact version, or a
+   reviewed full commit SHA for a supply-chain pin.
 
 ```yaml
 name: Label PRs with Jev
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # No checkout, no execution of PR code.
-      - uses: tomron/pr-ai-labeler@COMMIT_SHA
+      - uses: tomron/pr-ai-labeler@v1
         id: classify
         with:
           api-key: ${{ secrets.TYPESAFE_API_KEY }}
@@ -44,8 +44,8 @@ jobs:
           dry-run: "true"
 ```
 
-A private action repository must be made accessible to consuming repositories in
-its GitHub Actions settings. Do not change its visibility just to try the example.
+The action repository is public, so it can be used from public or private repos.
+See [RELEASE.md](RELEASE.md) for versioning and Marketplace publication.
 
 `pull_request_target` gives access to secrets and write permissions for fork PRs.
 **Never checkout, build, install dependencies from, or execute a PR head in this
@@ -193,3 +193,8 @@ Official references:
 - [System One HTTP API](https://docs.typesafe.ai/api)
 - [Noul decisions](https://docs.typesafe.ai/primitives/noul)
 - [TypeSafe JavaScript SDK](https://docs.typesafe.ai/sdk/javascript)
+
+## License
+
+MIT. See [LICENSE](LICENSE). Bundled dependencies retain their own licenses in
+`dist/licenses.txt` and `dist/index.js.LEGAL.txt`.
