@@ -19,7 +19,11 @@ it("model failure produces a clean no-label exit", async () => {
     w,
     false,
   );
-  expect(result).toEqual({ labels: [], status: "classification-failed" });
+  expect(result).toEqual({
+    labels: [],
+    status: "classification-failed",
+    reason: "bad response",
+  });
   expect(w.get).not.toHaveBeenCalled();
   expect(w.add).not.toHaveBeenCalled();
 });

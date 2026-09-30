@@ -4,14 +4,14 @@ import {
   type ContextSource,
   type PullRequest,
 } from "./context.js";
+import { describeError } from "./errors.js";
 import { applyLabels, type LabelWriter } from "./labels.js";
 export interface Classifier {
   classify(config: Config, state: Record<string, string>): Promise<Label[]>;
 }
-export interface Result {
-  labels: string[];
-  status: "applied" | "dry-run" | "no-labels" | "classification-failed";
-}
+export type Result =
+  | { labels: string[]; status: "applied" | "dry-run" | "no-labels" }
+  | { labels: []; status: "classification-failed"; reason: string };
 export async function run(
   pr: PullRequest,
   config: Config,
@@ -27,8 +27,12 @@ export async function run(
     // A second boundary rejects labels not defined by trusted configuration.
     if (selected.some((l) => !config.labels.some((allowed) => allowed === l)))
       throw new Error("Unexpected label");
-  } catch {
-    return { labels: [], status: "classification-failed" };
+  } catch (error) {
+    return {
+      labels: [],
+      status: "classification-failed",
+      reason: describeError(error),
+    };
   }
   if (!selected.length) return { labels: [], status: "no-labels" };
   if (dryRun) return { labels: selected.map((l) => l.name), status: "dry-run" };

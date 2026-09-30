@@ -41,6 +41,7 @@ export const configSchema = z
     // Conservative byte budgets, not a claimed Jev tokenizer.
     maxInputTokens: z.number().int().min(256).max(60000).default(16000),
     maxContextBytes: z.number().int().min(256).max(48000).default(24000),
+    maxBodyBytes: z.number().int().min(64).max(32000).default(4000),
     maxDiffBytes: z.number().int().min(64).max(32000).default(12000),
     repo: z
       .object({

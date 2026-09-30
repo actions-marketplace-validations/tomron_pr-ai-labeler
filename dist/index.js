@@ -32,7 +32,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // node_modules/tunnel/lib/tunnel.js
 var require_tunnel = __commonJS({
@@ -27165,13 +27164,6 @@ var require_dist = __commonJS({
   }
 });
 
-// src/index.ts
-var index_exports = {};
-__export(index_exports, {
-  main: () => main
-});
-module.exports = __toCommonJS(index_exports);
-
 // node_modules/@actions/core/lib/command.js
 var os = __toESM(require("os"), 1);
 
@@ -27647,6 +27639,17 @@ function getInput(name, options) {
     return val;
   }
   return val.trim();
+}
+function getBooleanInput(name, options) {
+  const trueValue = ["true", "True", "TRUE"];
+  const falseValue = ["false", "False", "FALSE"];
+  const val = getInput(name, options);
+  if (trueValue.includes(val))
+    return true;
+  if (falseValue.includes(val))
+    return false;
+  throw new TypeError(`Input does not meet YAML 1.2 "Core Schema" specification: ${name}
+Support boolean input list: \`true | True | TRUE | false | False | FALSE\``);
 }
 function setOutput(name, value) {
   const filePath = process.env["GITHUB_OUTPUT"] || "";
@@ -35897,6 +35900,7 @@ var configSchema = external_exports.object({
   // Conservative byte budgets, not a claimed Jev tokenizer.
   maxInputTokens: external_exports.number().int().min(256).max(6e4).default(16e3),
   maxContextBytes: external_exports.number().int().min(256).max(48e3).default(24e3),
+  maxBodyBytes: external_exports.number().int().min(64).max(32e3).default(4e3),
   maxDiffBytes: external_exports.number().int().min(64).max(32e3).default(12e3),
   repo: external_exports.object({
     include: external_exports.array(external_exports.string().min(1)).min(1).default(["README.md", "src/**/*.ts"]),
@@ -35953,6 +35957,23 @@ function budgetState(state, maxBytes) {
   }
   return result;
 }
+function fairClip(pieces, maxBytes, separator = "\n\n") {
+  let remaining = Math.max(
+    0,
+    maxBytes - Buffer.byteLength(separator) * Math.max(0, pieces.length - 1)
+  );
+  const result = [];
+  const order = pieces.map((piece, index) => ({ index, size: Buffer.byteLength(piece) })).sort((a, b) => a.size - b.size);
+  order.forEach(({ index }, n) => {
+    const clipped = clip(
+      pieces[index],
+      Math.floor(remaining / (order.length - n))
+    );
+    result[index] = clipped;
+    remaining -= Buffer.byteLength(clipped);
+  });
+  return result.join(separator);
+}
 
 // src/classifier.ts
 var answerSchema = external_exports.object({ type: external_exports.literal("noul"), noul: external_exports.number().finite().min(0).max(1) }).strict();
@@ -36001,20 +36022,17 @@ function estimatedTokens(value) {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 function boundedRequest(config, state) {
-  const empty = buildRequest(config, {});
-  if (estimatedTokens(empty) > config.maxInputTokens)
+  const empty = estimatedTokens(buildRequest(config, {}));
+  if (empty > config.maxInputTokens)
     throw new Error("Trusted instructions exceed token budget");
-  let low = 0, high = config.maxContextBytes;
-  let best = empty;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = buildRequest(config, budgetState(state, mid));
-    if (estimatedTokens(candidate) <= config.maxInputTokens) {
-      best = candidate;
-      low = mid + 1;
-    } else high = mid - 1;
-  }
-  return best;
+  const fixed = empty - "{}".length;
+  return buildRequest(
+    config,
+    budgetState(
+      state,
+      Math.min(config.maxContextBytes, config.maxInputTokens - fixed)
+    )
+  );
 }
 async function classify(config, state, apiKey, fetcher = fetch) {
   const response = await fetcher(config.endpoint, {
@@ -37932,14 +37950,13 @@ function allowedPath(path2, config) {
 async function collectContext(pr, config, source) {
   const state = {};
   if (config.context.includes("title")) state.title = pr.title;
-  if (config.context.includes("body")) state.body = pr.body ?? "";
+  if (config.context.includes("body"))
+    state.body = clip(pr.body ?? "", config.maxBodyBytes);
   if (config.context.includes("diff")) {
     const files = await source.files();
-    state.diff = clip(
-      files.map(
-        (f) => `${f.filename}
-${f.patch ?? "[patch unavailable: binary, too large, or omitted by GitHub]"}`
-      ).join("\n\n"),
+    state.diff = fairClip(
+      files.map((f) => `${f.filename}
+${f.patch ?? "[patch unavailable]"}`),
       config.maxDiffBytes
     );
   }
@@ -37977,6 +37994,15 @@ ${clip(content, config.repo.maxFileBytes)}`;
   return budgetState(state, config.maxContextBytes);
 }
 
+// src/errors.ts
+function describeError(error2) {
+  if (error2 instanceof ZodError)
+    return error2.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+  if (error2 instanceof SyntaxError) return "Malformed JSON";
+  if (error2 instanceof Error) return error2.message;
+  return "Unknown error";
+}
+
 // src/labels.ts
 function status(error2) {
   return typeof error2 === "object" && error2 !== null && "status" in error2 && typeof error2.status === "number" ? error2.status : void 0;
@@ -38007,8 +38033,12 @@ async function run(pr, config, source, classifier, writer, dryRun) {
     selected = await classifier.classify(config, state);
     if (selected.some((l) => !config.labels.some((allowed) => allowed === l)))
       throw new Error("Unexpected label");
-  } catch {
-    return { labels: [], status: "classification-failed" };
+  } catch (error2) {
+    return {
+      labels: [],
+      status: "classification-failed",
+      reason: describeError(error2)
+    };
   }
   if (!selected.length) return { labels: [], status: "no-labels" };
   if (dryRun) return { labels: selected.map((l) => l.name), status: "dry-run" };
@@ -38067,14 +38097,14 @@ async function main() {
   if (tokenLimit) {
     if (!/^\d+$/.test(tokenLimit))
       throw new Error("max-input-tokens must be an integer");
-    config.maxInputTokens = external_exports.number().int().min(256).max(6e4).parse(Number(tokenLimit));
+    config.maxInputTokens = configSchema.shape.maxInputTokens.parse(
+      Number(tokenLimit)
+    );
   }
   info(
     `Classifier endpoint: ${new URL(config.endpoint).origin}. Selected context will be sent there.`
   );
-  const dryRunValue = getInput("dry-run") || "false";
-  if (dryRunValue !== "true" && dryRunValue !== "false")
-    throw new Error("dry-run must be true or false");
+  const dryRun = getBooleanInput("dry-run");
   const result = await run(
     event.pull_request,
     config,
@@ -38119,29 +38149,23 @@ async function main() {
         });
       }
     },
-    dryRunValue === "true"
+    dryRun
   );
   setOutput("labels", JSON.stringify(result.labels));
   setOutput("status", result.status);
   if (result.status === "classification-failed")
     warning(
-      "Classification/context collection failed. No labels were created or applied. Check configuration, key, endpoint and API availability."
+      `Classification/context collection failed (${result.reason}). No labels were created or applied.`
     );
   else
     info(
       `Classification completed: ${result.status}; ${result.labels.length} label(s).`
     );
 }
-if (process.env.NODE_ENV !== "test") {
-  main().catch(() => {
-    setOutput("status", "failed");
-    setFailed(
-      "PR labeler failed during configuration or GitHub access. Check inputs and token permissions. Private error details are not logged."
-    );
-  });
-}
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
-  main
+
+// src/main.ts
+main().catch((error2) => {
+  setOutput("status", "failed");
+  setFailed(`PR labeler failed: ${describeError(error2)}`);
 });
 /*! For license information please see index.js.LEGAL.txt */

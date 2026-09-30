@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@actions/core", () => ({
   getInput: mocks.input,
+  getBooleanInput: (name: string) => mocks.input(name) === "true",
   setOutput: mocks.output,
   setSecret: mocks.secret,
   info: mocks.info,

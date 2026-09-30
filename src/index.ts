@@ -1,7 +1,7 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { z } from "zod";
-import { parseConfig } from "./config.js";
+import { configSchema, parseConfig } from "./config.js";
 import { classify } from "./classifier.js";
 import { run } from "./run.js";
 const eventSchema = z.object({
@@ -62,19 +62,14 @@ export async function main(): Promise<void> {
   if (tokenLimit) {
     if (!/^\d+$/.test(tokenLimit))
       throw new Error("max-input-tokens must be an integer");
-    config.maxInputTokens = z
-      .number()
-      .int()
-      .min(256)
-      .max(60000)
-      .parse(Number(tokenLimit));
+    config.maxInputTokens = configSchema.shape.maxInputTokens.parse(
+      Number(tokenLimit),
+    );
   }
   core.info(
     `Classifier endpoint: ${new URL(config.endpoint).origin}. Selected context will be sent there.`,
   );
-  const dryRunValue = core.getInput("dry-run") || "false";
-  if (dryRunValue !== "true" && dryRunValue !== "false")
-    throw new Error("dry-run must be true or false");
+  const dryRun = core.getBooleanInput("dry-run");
   const result = await run(
     event.pull_request,
     config,
@@ -120,24 +115,16 @@ export async function main(): Promise<void> {
         });
       },
     },
-    dryRunValue === "true",
+    dryRun,
   );
   core.setOutput("labels", JSON.stringify(result.labels));
   core.setOutput("status", result.status);
   if (result.status === "classification-failed")
     core.warning(
-      "Classification/context collection failed. No labels were created or applied. Check configuration, key, endpoint and API availability.",
+      `Classification/context collection failed (${result.reason}). No labels were created or applied.`,
     );
   else
     core.info(
       `Classification completed: ${result.status}; ${result.labels.length} label(s).`,
     );
-}
-if (process.env.NODE_ENV !== "test") {
-  main().catch(() => {
-    core.setOutput("status", "failed");
-    core.setFailed(
-      "PR labeler failed during configuration or GitHub access. Check inputs and token permissions. Private error details are not logged.",
-    );
-  });
 }

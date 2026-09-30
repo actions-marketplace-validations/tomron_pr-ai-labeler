@@ -1,6 +1,6 @@
 import { minimatch } from "minimatch";
 import type { Config } from "./config.js";
-import { budgetState, clip } from "./budget.js";
+import { budgetState, clip, fairClip } from "./budget.js";
 export interface PullRequest {
   title: string;
   body: string | null;
@@ -36,16 +36,12 @@ export async function collectContext(
 ): Promise<Record<string, string>> {
   const state: Record<string, string> = {};
   if (config.context.includes("title")) state.title = pr.title;
-  if (config.context.includes("body")) state.body = pr.body ?? "";
+  if (config.context.includes("body"))
+    state.body = clip(pr.body ?? "", config.maxBodyBytes);
   if (config.context.includes("diff")) {
     const files = await source.files();
-    state.diff = clip(
-      files
-        .map(
-          (f) =>
-            `${f.filename}\n${f.patch ?? "[patch unavailable: binary, too large, or omitted by GitHub]"}`,
-        )
-        .join("\n\n"),
+    state.diff = fairClip(
+      files.map((f) => `${f.filename}\n${f.patch ?? "[patch unavailable]"}`),
       config.maxDiffBytes,
     );
   }
