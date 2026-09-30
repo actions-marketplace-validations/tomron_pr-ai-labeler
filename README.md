@@ -14,7 +14,7 @@ be created or applied. The action only adds labels, never removes existing ones.
    and store it as the repository secret `TYPESAFE_API_KEY`. Do not put it in YAML.
 2. Commit `.github/pr-labeler.yml` to your default branch.
 3. Add this workflow. Start with `dry-run: 'true'`, inspect the outputs, then
-   change it to `'false'`. Use `@v1` for compatible releases, `@v1.0.0` for this exact version, or a
+   change it to `'false'`. Use `@v1` for compatible releases, `@v1.1.0` for this exact version, or a
    reviewed full commit SHA for a supply-chain pin.
 
 ```yaml
