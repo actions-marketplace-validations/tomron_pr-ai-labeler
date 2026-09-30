@@ -23,7 +23,7 @@ outputs:
   labels:
     description: JSON array of selected label names.
   status:
-    description: applied, dry-run, no-labels, skipped, or classification-failed.
+    description: applied, dry-run, no-labels, skipped, classification-failed, or failed.
 runs:
   using: node24
   main: dist/index.js

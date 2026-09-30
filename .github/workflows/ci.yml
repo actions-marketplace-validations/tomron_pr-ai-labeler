@@ -1,6 +1,7 @@
 name: CI
 on:
   push:
+    branches: [main]
   pull_request:
 permissions:
   contents: read
@@ -16,5 +17,5 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - name: Verify committed bundle
-        run: git diff --exit-code -- dist
+        run: test -z "$(git status --porcelain -- dist)"
       - run: npm audit --omit=dev --audit-level=moderate

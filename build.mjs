@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 const result = await build({
-  entryPoints: ["src/index.ts"],
+  entryPoints: ["src/main.ts"],
   outfile: "dist/index.js",
   bundle: true,
   platform: "node",

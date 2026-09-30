@@ -31,3 +31,28 @@ export function budgetState(
   }
   return result;
 }
+// Give small pieces in full and split the remainder evenly among larger ones,
+// so one large piece cannot starve the others.
+export function fairClip(
+  pieces: string[],
+  maxBytes: number,
+  separatorBytes: number,
+): string[] {
+  let remaining = Math.max(
+    0,
+    maxBytes - separatorBytes * Math.max(0, pieces.length - 1),
+  );
+  const result: string[] = [];
+  const order = pieces
+    .map((piece, index) => ({ index, size: Buffer.byteLength(piece) }))
+    .sort((a, b) => a.size - b.size);
+  order.forEach(({ index }, n) => {
+    const clipped = clip(
+      pieces[index]!,
+      Math.floor(remaining / (order.length - n)),
+    );
+    result[index] = clipped;
+    remaining -= Buffer.byteLength(clipped);
+  });
+  return result;
+}

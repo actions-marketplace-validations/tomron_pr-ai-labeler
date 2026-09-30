@@ -40,7 +40,6 @@ jobs:
           api-key: ${{ secrets.TYPESAFE_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .github/pr-labeler.yml
-          max-input-tokens: "16000"
           dry-run: "true"
 ```
 
@@ -63,6 +62,7 @@ context: [title, body, diff]
 threshold: 0.8
 maxInputTokens: 16000
 maxContextBytes: 24000
+maxBodyBytes: 4000
 maxDiffBytes: 12000
 instructions: >-
   Classify the changes by purpose. Select all relevant labels; do not infer a
@@ -86,14 +86,22 @@ description, then added to the PR. Existing label definitions are not modified.
 A probability must meet that label's threshold or the global threshold. Thresholds
 must be greater than 0.5 and at most 1. There are 1–100 labels, with unique names
 (case-insensitive), descriptions of 1–100 characters, and optional instructions.
-Unknown config fields and duplicate YAML keys are rejected.
+Unknown config fields and duplicate YAML keys are rejected. Quote colors made
+only of digits (`color: "123456"`); YAML otherwise reads them as numbers.
+
+Each label is its own question and repeats `instructions`, so the request grows
+with label count. About 600 bytes per label plus your instructions: at the
+default 16,000 budget, roughly 25 labels fit. Beyond the budget the run reports
+`classification-failed` with the reason in the warning.
 
 ### Context choices
 
 - `title`: PR title.
-- `body`: PR description, empty if absent.
+- `body`: PR description, empty if absent, capped at `maxBodyBytes`.
 - `diff`: changed-file names and available per-file patches from GitHub. Binary
-  or oversized patches can be absent, and are marked as unavailable. GitHub's
+  or oversized patches can be absent, and are marked `[patch unavailable]`.
+  Each file gets a fair share of `maxDiffBytes`, so one huge patch cannot hide
+  the others. The diff is **not** filtered for secret-looking paths. GitHub's
   PR-file API returns at most 3,000 files. This is not guaranteed to be the full
   raw diff.
 - `repo-tree`: paths matching the repo include/exclude rules at the base SHA.
@@ -115,10 +123,11 @@ repo:
 
 Defaults are `include: ['README.md', 'src/**/*.ts']`, no extra excludes, 30 files,
 2,000 bytes per file. Repo content excludes common secret names, key/certificate
-extensions, dependency/build directories and lockfiles even under broad includes.
+extensions, `node_modules`, `dist` and `vendor` directories and `*.lock` files even under
+broad includes (`package-lock.json` is not excluded; add it to `exclude`).
 This is **not a secret scanner**: review patterns and contents yourself before
 sending repository data. Binary content is skipped. A truncated GitHub tree causes
-a clean no-label classification exit rather than pretending the tree is complete.
+a `classification-failed` exit rather than pretending the tree is complete.
 
 ### Input token budget
 
@@ -162,7 +171,8 @@ calls. Requests time out after 30 seconds.
 `labels` is a JSON array of names. `status` is `applied`, `dry-run`, `no-labels`,
 `classification-failed`, or `skipped`. Configuration and GitHub write failures
 fail the job, with status `failed`. Model/network/parse/context failures return
-`classification-failed` and no labels; check that output if you need stricter CI.
+`classification-failed` and no labels, with a sanitized reason in the warning;
+check that output if you need stricter CI.
 
 ## Safety and testing
 

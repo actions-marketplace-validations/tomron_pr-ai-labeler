@@ -84,4 +84,28 @@ describe("context safety", () => {
     expect(Buffer.byteLength(result.diff ?? "")).toBeLessThanOrEqual(64);
     expect(result.diff).toContain("patch unavailable");
   });
+  it("keeps every file in the diff when one patch is huge", async () => {
+    const result = await collectContext(
+      { title: "x", body: null, base: { sha: "safe" } },
+      { ...config, maxDiffBytes: 400, context: ["diff"] },
+      {
+        files: vi.fn().mockResolvedValue([
+          { filename: "big.ts", patch: "x".repeat(5000) },
+          { filename: "small.ts", patch: "+one line" },
+        ]),
+        tree: vi.fn(),
+        content: vi.fn(),
+      },
+    );
+    expect(result.diff).toContain("small.ts\n+one line");
+    expect(Buffer.byteLength(result.diff ?? "")).toBeLessThanOrEqual(400);
+  });
+  it("caps the PR body so it cannot consume the whole budget", async () => {
+    const result = await collectContext(
+      { title: "x", body: "b".repeat(10000), base: { sha: "safe" } },
+      { ...config, maxBodyBytes: 100, context: ["body"] },
+      { files: vi.fn(), tree: vi.fn(), content: vi.fn() },
+    );
+    expect(Buffer.byteLength(result.body ?? "")).toBe(100);
+  });
 });

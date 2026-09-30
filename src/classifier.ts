@@ -61,21 +61,18 @@ export function estimatedTokens(value: unknown): number {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 export function boundedRequest(config: Config, state: Record<string, string>) {
-  const empty = buildRequest(config, {});
-  if (estimatedTokens(empty) > config.maxInputTokens)
+  // The request is the empty-state request with `{}` replaced by the serialized
+  // state, so the space left for state is exact.
+  const fixed = estimatedTokens(buildRequest(config, {})) - 2;
+  if (fixed + 2 > config.maxInputTokens)
     throw new Error("Trusted instructions exceed token budget");
-  let low = 0,
-    high = config.maxContextBytes;
-  let best = empty;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = buildRequest(config, budgetState(state, mid));
-    if (estimatedTokens(candidate) <= config.maxInputTokens) {
-      best = candidate;
-      low = mid + 1;
-    } else high = mid - 1;
-  }
-  return best;
+  return buildRequest(
+    config,
+    budgetState(
+      state,
+      Math.min(config.maxContextBytes, config.maxInputTokens - fixed),
+    ),
+  );
 }
 export async function classify(
   config: Config,
