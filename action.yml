@@ -1,0 +1,32 @@
+name: Jev PR multi-label classifier
+description: Classify pull requests with TypeSafe Jev and add configured labels.
+inputs:
+  api-key:
+    description: TypeSafe API key. Supply a repository or organization secret.
+    required: true
+  github-token:
+    description: Token with contents read, issues write and pull requests write.
+    required: true
+    default: ${{ github.token }}
+  config-path:
+    description: YAML configuration in the PR base commit (never the PR branch).
+    required: false
+    default: .github/pr-labeler.yml
+  max-input-tokens:
+    description: Conservative total request token estimate, including instructions. Overrides config maxInputTokens. Empty uses config (default 16000).
+    required: false
+  dry-run:
+    description: Classify and output labels without creating or applying them.
+    required: false
+    default: "false"
+outputs:
+  labels:
+    description: JSON array of selected label names.
+  status:
+    description: applied, dry-run, no-labels, skipped, or classification-failed.
+runs:
+  using: node24
+  main: dist/index.js
+branding:
+  icon: tag
+  color: purple

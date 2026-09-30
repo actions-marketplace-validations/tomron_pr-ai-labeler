@@ -1,0 +1,16 @@
+model: jev-latest
+context: [title, body, diff]
+threshold: 0.8
+maxContextBytes: 24000
+maxDiffBytes: 12000
+instructions: Classify the changes by their purpose. Apply every label that fits.
+labels:
+  - name: bug
+    description: Fixes incorrect behavior or a regression
+    color: d73a4a
+  - name: enhancement
+    description: Adds or improves a capability
+    color: a2eeef
+  - name: documentation
+    description: Changes documentation or usage examples
+    color: "0075ca"
