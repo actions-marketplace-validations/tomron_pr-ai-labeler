@@ -9,11 +9,9 @@ import { applyLabels, type LabelWriter } from "./labels.js";
 export interface Classifier {
   classify(config: Config, state: Record<string, string>): Promise<Label[]>;
 }
-export interface Result {
-  labels: string[];
-  status: "applied" | "dry-run" | "no-labels" | "classification-failed";
-  reason?: string;
-}
+export type Result =
+  | { labels: string[]; status: "applied" | "dry-run" | "no-labels" }
+  | { labels: []; status: "classification-failed"; reason: string };
 export async function run(
   pr: PullRequest,
   config: Config,

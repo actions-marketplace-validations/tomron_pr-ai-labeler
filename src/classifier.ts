@@ -63,9 +63,10 @@ export function estimatedTokens(value: unknown): number {
 export function boundedRequest(config: Config, state: Record<string, string>) {
   // The request is the empty-state request with `{}` replaced by the serialized
   // state, so the space left for state is exact.
-  const fixed = estimatedTokens(buildRequest(config, {})) - 2;
-  if (fixed + 2 > config.maxInputTokens)
+  const empty = estimatedTokens(buildRequest(config, {}));
+  if (empty > config.maxInputTokens)
     throw new Error("Trusted instructions exceed token budget");
+  const fixed = empty - "{}".length;
   return buildRequest(
     config,
     budgetState(

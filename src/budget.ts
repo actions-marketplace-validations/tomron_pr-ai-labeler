@@ -36,11 +36,11 @@ export function budgetState(
 export function fairClip(
   pieces: string[],
   maxBytes: number,
-  separatorBytes: number,
-): string[] {
+  separator = "\n\n",
+): string {
   let remaining = Math.max(
     0,
-    maxBytes - separatorBytes * Math.max(0, pieces.length - 1),
+    maxBytes - Buffer.byteLength(separator) * Math.max(0, pieces.length - 1),
   );
   const result: string[] = [];
   const order = pieces
@@ -54,5 +54,5 @@ export function fairClip(
     result[index] = clipped;
     remaining -= Buffer.byteLength(clipped);
   });
-  return result;
+  return result.join(separator);
 }

@@ -43,8 +43,7 @@ export async function collectContext(
     state.diff = fairClip(
       files.map((f) => `${f.filename}\n${f.patch ?? "[patch unavailable]"}`),
       config.maxDiffBytes,
-      2,
-    ).join("\n\n");
+    );
   }
   if (config.context.some((c) => c === "repo-tree" || c === "repo-files")) {
     const result = await source.tree(pr.base.sha);

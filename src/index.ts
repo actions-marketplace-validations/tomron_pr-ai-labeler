@@ -121,7 +121,7 @@ export async function main(): Promise<void> {
   core.setOutput("status", result.status);
   if (result.status === "classification-failed")
     core.warning(
-      `Classification/context collection failed (${result.reason ?? "unknown"}). No labels were created or applied.`,
+      `Classification/context collection failed (${result.reason}). No labels were created or applied.`,
     );
   else
     core.info(

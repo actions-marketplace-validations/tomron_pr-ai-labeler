@@ -35957,10 +35957,10 @@ function budgetState(state, maxBytes) {
   }
   return result;
 }
-function fairClip(pieces, maxBytes, separatorBytes) {
+function fairClip(pieces, maxBytes, separator = "\n\n") {
   let remaining = Math.max(
     0,
-    maxBytes - separatorBytes * Math.max(0, pieces.length - 1)
+    maxBytes - Buffer.byteLength(separator) * Math.max(0, pieces.length - 1)
   );
   const result = [];
   const order = pieces.map((piece, index) => ({ index, size: Buffer.byteLength(piece) })).sort((a, b) => a.size - b.size);
@@ -35972,7 +35972,7 @@ function fairClip(pieces, maxBytes, separatorBytes) {
     result[index] = clipped;
     remaining -= Buffer.byteLength(clipped);
   });
-  return result;
+  return result.join(separator);
 }
 
 // src/classifier.ts
@@ -36022,9 +36022,10 @@ function estimatedTokens(value) {
   return Buffer.byteLength(JSON.stringify(value), "utf8");
 }
 function boundedRequest(config, state) {
-  const fixed = estimatedTokens(buildRequest(config, {})) - 2;
-  if (fixed + 2 > config.maxInputTokens)
+  const empty = estimatedTokens(buildRequest(config, {}));
+  if (empty > config.maxInputTokens)
     throw new Error("Trusted instructions exceed token budget");
+  const fixed = empty - "{}".length;
   return buildRequest(
     config,
     budgetState(
@@ -37956,9 +37957,8 @@ async function collectContext(pr, config, source) {
     state.diff = fairClip(
       files.map((f) => `${f.filename}
 ${f.patch ?? "[patch unavailable]"}`),
-      config.maxDiffBytes,
-      2
-    ).join("\n\n");
+      config.maxDiffBytes
+    );
   }
   if (config.context.some((c) => c === "repo-tree" || c === "repo-files")) {
     const result = await source.tree(pr.base.sha);
@@ -38155,7 +38155,7 @@ async function main() {
   setOutput("status", result.status);
   if (result.status === "classification-failed")
     warning(
-      `Classification/context collection failed (${result.reason ?? "unknown"}). No labels were created or applied.`
+      `Classification/context collection failed (${result.reason}). No labels were created or applied.`
     );
   else
     info(
